@@ -1,117 +1,71 @@
-# Stockfish Pi Chess
+# Stockfish Pi Chess v24
 
-A clean Python/PySide6 chess GUI that uses a Raspberry Pi as a dedicated
-Stockfish server, with an emphasis on playing, reviewing and learning from
-your own games.
+A Windows chess GUI built around **Play → Review → Understand → Retry**.
 
-## Highlights
+Stockfish can run remotely on a Raspberry Pi or other Linux computer over SSH while the graphical interface runs on Windows.
 
-- Play Stockfish remotely over SSH
-- Easy / Medium / Hard play
+## Features
+
+- Play Stockfish at Easy, Medium or Hard levels
+- Remote Stockfish over SSH
 - Adjustable Threads and Hash
-- Smooth move animation
-- Live evaluation and evaluation bar
+- Live evaluation bar
+- Hint / best move and MultiPV candidate arrows
+- PGN load/save and full-game analysis
 - Evaluation graph
-- MultiPV and top candidate arrows
-- Whole-game Stockfish review
-- Inaccuracy / Mistake / Blunder classification
-- Clear PLAYED vs BEST arrows
-- Retry Mistakes training mode
-- Previous / next mistake navigation
-- PGN load/save
-- Lightweight offline opening recognition
-- Local Syzygy tablebase probing
-- Move, check and checkmate sounds/reactions
+- Inaccuracy, mistake and blunder review
+- BEST vs PLAYED move arrows
+- Retry Mistakes training
+- Guided Game Replay
+- Try Better Move exercises
+- Opening recognition/explorer
+- Optional local Syzygy endgame tablebases
+- Move, check and checkmate sounds
+- Multiple piece styles and smooth move animation
 
-## Raspberry Pi setup
+## Windows requirements
 
-On Raspberry Pi OS / Debian:
+- Windows 10 or 11
+- Python 3
+- Network/SSH access to the computer running Stockfish
+
+Double-click `run_windows.cmd`. On first run it creates a local Python virtual environment and installs the packages in `requirements.txt`.
+
+## Stockfish computer / Raspberry Pi
+
+On Debian/Raspberry Pi OS/Ubuntu, Stockfish can usually be installed with:
 
 ```bash
 sudo apt update
-sudo apt install stockfish openssh-server
+sudo apt install stockfish
 ```
 
-Check the Stockfish path:
+A common executable path is `/usr/games/stockfish`.
 
-```bash
-which stockfish
-```
-
-A common location is `/usr/games/stockfish`.
-
-## SSH connection
-
-The public version uses this example command:
+The public GUI starts with this example engine command:
 
 ```text
 ssh -T pi@raspberrypi.local /usr/games/stockfish
 ```
 
-Change the username and hostname/IP to match your Raspberry Pi.
+Replace the username, hostname/address and Stockfish path with your own. SSH key authentication is recommended. Test the command in Windows Terminal before using it in the GUI.
 
-SSH keys are recommended so the GUI can connect without an interactive
-password prompt.
+## Game Review and Guided Replay
 
-Test the command from Windows before using the GUI.
+Load a PGN and run **Review Entire Game**. Stockfish evaluates each move and records the played move, preferred move, evaluation loss and continuation.
 
-## Windows installation
+Then use **Play Guided Review** to step through the analysed game with Previous/Next or Auto Play. At positions where a stronger move was available, **Try Better Move** hides the answer and lets you attempt the position yourself without modifying the original PGN.
 
-Install Python 3, then either double-click:
+## Syzygy tablebases
 
-```text
-run_windows.cmd
-```
+Syzygy is optional. In the Opening / Endgame section, choose a folder containing `.rtbw` and `.rtbz` files. A 3–5 piece collection can provide mathematically solved results for positions containing five pieces or fewer, including both kings.
 
-or run:
+The rest of the GUI works normally without tablebase files.
 
-```powershell
-py -m venv .venv
-.venv\Scripts\activate
-pip install -r requirements.txt
-python stockfish_pi_chess.py
-```
+## Notes
 
-## Game Review
+This is a practical chess playing and training GUI rather than an engine tournament manager. Review classifications are based on engine evaluation changes and are intended as training aids.
 
-After playing or loading a PGN, run Game Review and select a move.
+## License
 
-- Solid blue arrow = Stockfish best move
-- Orange dashed arrow = played Inaccuracy/Mistake
-- Red dashed arrow = played Blunder
-
-The position shown is the position before the selected move, making the
-played move and Stockfish recommendation directly comparable.
-
-## Retry Mistakes
-
-Select an Inaccuracy, Mistake or Blunder and press **Retry Selected Mistake**.
-The answer is hidden and the original position is restored so you can try to
-find Stockfish's best move yourself.
-
-## Opening explorer
-
-The included opening explorer is intentionally lightweight and offline. It
-recognises a selection of major opening families and shows typical
-continuations. It is not a live statistical opening database.
-
-## Syzygy
-
-In the Opening / Endgame tab, choose a local folder containing Syzygy
-`.rtbw` / `.rtbz` files. Supported positions can then be probed for exact WDL
-and, where available, DTZ results.
-
-## Privacy
-
-This release contains no developer IP address, email address, Windows user
-path or SSH password. The Raspberry Pi connection is an example only.
-
-## Project philosophy
-
-Keep the interface focused:
-
-**Play -> Review -> Understand -> Retry**
-
-## Licence
-
-MIT. See `LICENSE`.
+MIT — see `LICENSE`.

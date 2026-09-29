@@ -352,72 +352,97 @@ class BoardWidget(QWidget):
                 p.setPen(QColor("#111111"))
             p.drawText(rect, Qt.AlignCenter, glyph)
 
-        # Game-review played-move arrow.
-        # This is deliberately distinct from the blue Stockfish-best arrow.
+        # v23 polished arrows: rounded, anti-aliased, outlined and proportioned
+        # consistently so they stay clean at different board sizes.
+        import math
+        from PySide6.QtCore import QPointF
+
+        def draw_arrow(uci, colour, width_ratio=.075, head_ratio=.20,
+                       dashed=False, label=None, alpha=220, outline=True):
+            if not uci or len(uci) < 4:
+                return
+            a=chess.parse_square(uci[:2]); b=chess.parse_square(uci[2:4])
+            ac,ar=self.square_to_display(a); bc,br=self.square_to_display(b)
+            ax,ay=x0+(ac+.5)*sq,y0+(ar+.5)*sq
+            bx,by=x0+(bc+.5)*sq,y0+(br+.5)*sq
+            ang=math.atan2(by-ay,bx-ax)
+            # Stop the shaft just before the destination centre so the arrowhead
+            # reads as a distinct shape instead of a thick triangular blob.
+            head=sq*head_ratio
+            shaft_end_x=bx-head*.52*math.cos(ang)
+            shaft_end_y=by-head*.52*math.sin(ang)
+            col=QColor(colour); col.setAlpha(alpha)
+            width=max(2.2,sq*width_ratio)
+
+            # Soft dark outline improves visibility on both light and dark squares.
+            if outline:
+                shadow=QColor(10,14,20,min(145,alpha))
+                op=QPen(shadow,width+max(2.0,sq*.025))
+                op.setCapStyle(Qt.RoundCap)
+                op.setJoinStyle(Qt.RoundJoin)
+                if dashed: op.setStyle(Qt.DashLine)
+                p.setPen(op)
+                p.drawLine(QPointF(ax,ay),QPointF(shaft_end_x,shaft_end_y))
+
+            pen=QPen(col,width)
+            pen.setCapStyle(Qt.RoundCap)
+            pen.setJoinStyle(Qt.RoundJoin)
+            if dashed:
+                pen.setStyle(Qt.DashLine)
+            p.setPen(pen)
+            p.drawLine(QPointF(ax,ay),QPointF(shaft_end_x,shaft_end_y))
+
+            spread=.48
+            left=QPointF(bx-head*math.cos(ang-spread),by-head*math.sin(ang-spread))
+            right=QPointF(bx-head*math.cos(ang+spread),by-head*math.sin(ang+spread))
+            poly=QPolygonF([QPointF(bx,by),left,right])
+            if outline:
+                p.setPen(QPen(QColor(10,14,20,min(145,alpha)),max(1.5,sq*.025)))
+                p.setBrush(QColor(10,14,20,min(145,alpha)))
+                # Slightly larger outline is supplied mainly by the polygon border.
+                p.drawPolygon(poly)
+            p.setPen(QPen(col,max(1.0,sq*.012)))
+            p.setBrush(col)
+            p.drawPolygon(poly)
+
+            if label:
+                # Compact pill rather than the old rectangular PLAYED tag.
+                font=QFont("Segoe UI",max(7,int(sq*.115)),QFont.Bold)
+                p.setFont(font)
+                tw=sq*(.72 if len(label)>2 else .30)
+                th=sq*.25
+                # Offset sideways from the arrow tip so it does not cover the head.
+                nx=-math.sin(ang); ny=math.cos(ang)
+                cx=bx+nx*sq*.25; cy=by+ny*sq*.25
+                tag=QRectF(cx-tw/2,cy-th/2,tw,th)
+                p.setPen(QPen(QColor(255,255,255,65),1))
+                p.setBrush(QColor(18,22,28,220))
+                p.drawRoundedRect(tag,th*.45,th*.45)
+                p.setPen(QColor("#ffffff"))
+                p.drawText(tag,Qt.AlignCenter,label)
+
+        # Played move: dashed warm colour. Red is reserved for blunders.
         if self.review_played_arrow:
             try:
-                a=chess.parse_square(self.review_played_arrow[:2]); b=chess.parse_square(self.review_played_arrow[2:4])
-                ac,ar=self.square_to_display(a); bc,br=self.square_to_display(b)
-                ax,ay=x0+(ac+.5)*sq,y0+(ar+.5)*sq
-                bx,by=x0+(bc+.5)*sq,y0+(br+.5)*sq
                 cls=self.review_classification or ""
-                col=QColor(220,55,55,220) if cls=="Blunder" else QColor(235,125,45,220)
-                pen=QPen(col,max(5,sq*0.09))
-                pen.setStyle(Qt.DashLine)
-                p.setPen(pen); p.setBrush(col)
-                p.drawLine(int(ax),int(ay),int(bx),int(by))
-                import math
-                ang=math.atan2(by-ay,bx-ax); head=sq*.22
-                leftp=(bx-head*math.cos(ang-.55),by-head*math.sin(ang-.55))
-                rightp=(bx-head*math.cos(ang+.55),by-head*math.sin(ang+.55))
-                from PySide6.QtCore import QPointF
-                p.drawPolygon(QPolygonF([QPointF(bx,by),QPointF(*leftp),QPointF(*rightp)]))
-                # Clear label near the played move's destination.
-                label="PLAYED"
-                p.setPen(QColor("#ffffff"))
-                p.setFont(QFont("Segoe UI",max(8,int(sq*.13)),QFont.Bold))
-                tag=QRectF(bx-sq*.43,by-sq*.46,sq*.86,sq*.24)
-                p.fillRect(tag,QColor(25,25,25,210))
-                p.drawText(tag,Qt.AlignCenter,label)
+                colour=QColor(226,62,62) if cls=="Blunder" else QColor(238,139,52)
+                draw_arrow(self.review_played_arrow,colour,.080,.22,True,"PLAYED",230,True)
             except Exception:
                 pass
 
-        # Candidate move arrows from MultiPV analysis: #2 and #3 are thinner/lighter.
-        for idx, uci in enumerate(self.candidate_arrows[:2], start=2):
+        # MultiPV alternatives: deliberately quieter than the main recommendation.
+        for idx, uci in enumerate(self.candidate_arrows[:2],start=2):
             try:
-                a=chess.parse_square(uci[:2]); b=chess.parse_square(uci[2:4])
-                ac,ar=self.square_to_display(a); bc,br=self.square_to_display(b)
-                ax,ay=x0+(ac+.5)*sq,y0+(ar+.5)*sq; bx,by=x0+(bc+.5)*sq,y0+(br+.5)*sq
-                alpha=135 if idx==2 else 90
-                col=QColor(90,155,225,alpha)
-                p.setPen(QPen(col,max(2,sq*(0.055 if idx==2 else 0.04))))
-                p.setBrush(col); p.drawLine(int(ax),int(ay),int(bx),int(by))
-                import math
-                ang=math.atan2(by-ay,bx-ax); head=sq*(.16 if idx==2 else .13)
-                from PySide6.QtCore import QPointF
-                p.drawPolygon(QPolygonF([QPointF(bx,by), QPointF(bx-head*math.cos(ang-.55),by-head*math.sin(ang-.55)), QPointF(bx-head*math.cos(ang+.55),by-head*math.sin(ang+.55))]))
-                p.setPen(QColor(255,255,255,190)); p.setFont(QFont("Segoe UI",max(7,int(sq*.11)),QFont.Bold))
-                p.drawText(QRectF(bx-sq*.12,by-sq*.12,sq*.24,sq*.24),Qt.AlignCenter,str(idx))
+                alpha=150 if idx==2 else 105
+                draw_arrow(uci,QColor(103,174,242),.050 if idx==2 else .040,
+                           .165 if idx==2 else .145,False,str(idx),alpha,True)
             except Exception:
                 pass
 
-        # best-line arrow
+        # Stockfish best move: strongest visual hierarchy.
         if self.arrow:
             try:
-                a = chess.parse_square(self.arrow[:2]); b = chess.parse_square(self.arrow[2:4])
-                ac, ar = self.square_to_display(a); bc, br = self.square_to_display(b)
-                ax, ay = x0+(ac+.5)*sq, y0+(ar+.5)*sq
-                bx, by = x0+(bc+.5)*sq, y0+(br+.5)*sq
-                pen = QPen(QColor(64, 110, 180, 190), max(4, sq*0.08))
-                p.setPen(pen); p.setBrush(QColor(64, 110, 180, 190))
-                p.drawLine(int(ax), int(ay), int(bx), int(by))
-                import math
-                ang = math.atan2(by-ay, bx-ax)
-                head = sq*.20
-                leftp = (bx-head*math.cos(ang-.55), by-head*math.sin(ang-.55))
-                rightp = (bx-head*math.cos(ang+.55), by-head*math.sin(ang+.55))
-                from PySide6.QtCore import QPointF
-                p.drawPolygon(QPolygonF([QPointF(bx,by), QPointF(*leftp), QPointF(*rightp)]))
+                draw_arrow(self.arrow,QColor(66,133,244),.085,.225,False,None,225,True)
             except Exception:
                 pass
 
@@ -479,14 +504,22 @@ class EvaluationBar(QWidget):
         white_h = int(r.height() * white_share)
         split_y = r.bottom() - white_h + 1
 
+        # v24: clip BOTH colour fills to the same rounded path. Previously the
+        # rectangular white fill escaped through the bottom rounded corners,
+        # producing the small white square corners the user noticed.
+        from PySide6.QtGui import QPainterPath
+        rounded = QPainterPath()
+        rounded.addRoundedRect(QRectF(r), 8.0, 8.0)
+
+        p.save()
+        p.setClipPath(rounded)
         p.setPen(Qt.NoPen)
-        p.setBrush(QColor("#171a1f"))
-        p.drawRoundedRect(r, 8, 8)
-
+        p.fillRect(r, QColor("#171a1f"))
         white_rect = QRect(r.left(), split_y, r.width(), max(0, r.bottom()-split_y+1))
-        p.setBrush(QColor("#f2f3f5"))
-        p.drawRect(white_rect)
+        p.fillRect(white_rect, QColor("#f2f3f5"))
+        p.restore()
 
+        # One clean rounded outline over the clipped fills.
         p.setPen(QPen(QColor("#50545b"), 1))
         p.setBrush(Qt.NoBrush)
         p.drawRoundedRect(r, 8, 8)
@@ -503,6 +536,7 @@ class EvaluationBar(QWidget):
             p.setPen(QColor("#f7f7f7"))
             text_rect = QRect(r.left(), r.top()+8, r.width(), 34)
         p.drawText(text_rect, Qt.AlignCenter, self.label.replace("+",""))
+
 
 class EvalGraph(QWidget):
     def __init__(self, app):
@@ -566,7 +600,7 @@ def classify(loss):
 class MainWindow(QMainWindow):
     def __init__(self):
         super().__init__()
-        self.setWindowTitle("Stockfish Pi Chess — Training Suite")
+        self.setWindowTitle("Stockfish Pi Chess v24")
 
         self.setStyleSheet("""
             QMainWindow, QWidget {
@@ -633,6 +667,48 @@ class MainWindow(QMainWindow):
                 padding: 5px 7px;
                 selection-background-color: #4d78a8;
             }
+            /* v24: keep the Threads spinner buttons fully clickable/visible.
+               The previous generic QSpinBox padding overlapped its arrow controls. */
+            QSpinBox {
+                padding: 5px 24px 5px 7px;
+            }
+            QSpinBox::up-button {
+                subcontrol-origin: border;
+                subcontrol-position: top right;
+                width: 20px;
+                border-left: 1px solid #454c56;
+                border-bottom: 1px solid #343a43;
+                border-top-right-radius: 5px;
+                background: #343a43;
+            }
+            QSpinBox::down-button {
+                subcontrol-origin: border;
+                subcontrol-position: bottom right;
+                width: 20px;
+                border-left: 1px solid #454c56;
+                border-top: 1px solid #343a43;
+                border-bottom-right-radius: 5px;
+                background: #343a43;
+            }
+            QSpinBox::up-button:hover, QSpinBox::down-button:hover {
+                background: #4a535f;
+            }
+            QSpinBox::up-arrow {
+                image: none;
+                width: 0px;
+                height: 0px;
+                border-left: 4px solid transparent;
+                border-right: 4px solid transparent;
+                border-bottom: 6px solid #e8eaed;
+            }
+            QSpinBox::down-arrow {
+                image: none;
+                width: 0px;
+                height: 0px;
+                border-left: 4px solid transparent;
+                border-right: 4px solid transparent;
+                border-top: 6px solid #e8eaed;
+            }
             QTabWidget::pane {
                 border: 1px solid #3d444d;
                 border-radius: 8px;
@@ -697,6 +773,16 @@ class MainWindow(QMainWindow):
         self.retry_mode=False
         self.retry_row=None
         self.retry_attempts=0
+        # Guided replay / coach mode
+        self.guided_active=False
+        self.guided_ply=0
+        self.guided_auto=False
+        self.guided_timer=QTimer(self)
+        self.guided_timer.setInterval(2200)
+        self.guided_timer.timeout.connect(self.guided_next)
+        self.guided_try_mode=False
+        self.guided_try_row=None
+        self.guided_try_attempts=0
         self.syzygy_path=""
         self.syzygy=None
         self.build_ui()
@@ -711,7 +797,7 @@ class MainWindow(QMainWindow):
         outer=QVBoxLayout(root)
 
         header=QHBoxLayout()
-        title=QLabel("Stockfish Pi Chess")
+        title=QLabel("STOCKFISH CHESS v24")
         title.setObjectName("AppTitle")
         subtitle=QLabel("Raspberry Pi analysis workstation")
         subtitle.setObjectName("AppSubtitle")
@@ -836,6 +922,31 @@ class MainWindow(QMainWindow):
         rl.addLayout(review_opts)
         self.progress=QProgressBar(); self.progress.setValue(0); rl.addWidget(self.progress)
 
+        guided=QGroupBox("Guided Game Replay")
+        gl=QVBoxLayout(guided)
+        grow=QHBoxLayout()
+        self.guided_play_btn=QPushButton("▶ Play Guided Review")
+        self.guided_play_btn.clicked.connect(self.start_guided_review)
+        self.guided_prev_btn=QPushButton("◀ Previous")
+        self.guided_prev_btn.clicked.connect(self.guided_previous)
+        self.guided_next_btn=QPushButton("Next ▶")
+        self.guided_next_btn.clicked.connect(self.guided_next)
+        self.guided_auto_btn=QPushButton("Auto Play")
+        self.guided_auto_btn.setCheckable(True)
+        self.guided_auto_btn.clicked.connect(self.toggle_guided_auto)
+        self.guided_try_btn=QPushButton("🎯 Try Better Move")
+        self.guided_try_btn.clicked.connect(self.guided_try_better)
+        grow.addWidget(self.guided_play_btn); grow.addWidget(self.guided_prev_btn)
+        grow.addWidget(self.guided_next_btn); grow.addWidget(self.guided_auto_btn)
+        grow.addWidget(self.guided_try_btn)
+        gl.addLayout(grow)
+        self.guided_explanation=QLabel("Analyse a loaded PGN, then press Play Guided Review.")
+        self.guided_explanation.setWordWrap(True)
+        self.guided_explanation.setMinimumHeight(72)
+        self.guided_explanation.setStyleSheet("background:#171a20; border:1px solid #59616d; border-radius:7px; padding:8px; font-size:10.5pt;")
+        gl.addWidget(self.guided_explanation)
+        rl.addWidget(guided)
+
         self.review_detail=QLabel("Select a reviewed move to see what was played and Stockfish's best move.")
         self.review_detail.setWordWrap(True)
         self.review_detail.setObjectName("ReviewDetail")
@@ -932,11 +1043,12 @@ class MainWindow(QMainWindow):
             self.play_level.setEnabled(True)
             self.play_status.setText("Server play is off")
         self.board=chess.Board(); self.game_start_fen=chess.STARTING_FEN; self.game_moves=[]
-        self.loaded_headers=chess.pgn.Headers(); self.review_rows=[]; self.board_widget.arrow=None
+        self.loaded_headers=chess.pgn.Headers(); self.review_rows=[]; self.board_widget.arrow=None; self.board_widget.candidate_arrows=[]
         self.board_widget.review_played_arrow=None
         self.board_widget.review_classification=None
         if hasattr(self,"eval_bar"): self.eval_bar.set_eval(0,"0.00")
         self.retry_mode=False; self.retry_row=None
+        self.stop_guided_review()
         self.refresh()
 
     def refresh(self):
@@ -972,6 +1084,41 @@ class MainWindow(QMainWindow):
         self.update_opening_explorer()
 
     def play_move(self, move):
+        # v21: analysis/hint arrows are temporary. Once the player commits a move,
+        # clear the best/candidate arrows so the old hint does not remain on the board.
+        # Review/training code can draw its own arrows again when appropriate.
+        if not self.retry_mode:
+            self.board_widget.arrow=None
+            self.board_widget.candidate_arrows=[]
+            self.board_widget.update()
+
+        # Guided Review "Try Better Move" intercepts the attempt without changing
+        # the saved PGN. The learner can keep trying until the reviewed best move is found.
+        if self.guided_try_mode and self.guided_try_row is not None:
+            if move not in self.board.legal_moves:
+                return
+            self.guided_try_attempts += 1
+            target=self.guided_try_row.bestmove or ""
+            try: san=self.board.san(move)
+            except Exception: san=move.uci()
+            if move.uci()==target:
+                self.guided_explanation.setText(
+                    f"✓ Correct — {san} matches Stockfish's best move. "
+                    f"You found the improvement in {self.guided_try_attempts} attempt(s). "
+                    f"Press Next to continue the guided review."
+                )
+                self.board_widget.arrow=target
+                self.guided_try_mode=False
+                self.board_widget.update()
+            else:
+                self.guided_explanation.setText(
+                    f"Not quite — {san} is legal, but Stockfish preferred another move here. "
+                    f"Try again. Attempt {self.guided_try_attempts}."
+                )
+                self.board_widget.arrow=None
+                self.board_widget.update()
+            return
+
         # Retry-Mistake trainer intercepts board moves without altering the saved game.
         if self.retry_mode and self.retry_row is not None:
             if move not in self.board.legal_moves:
@@ -1364,6 +1511,7 @@ class MainWindow(QMainWindow):
             self.play_move(self.best_move)
 
     def load_pgn(self):
+        self.stop_guided_review()
         fn,_=QFileDialog.getOpenFileName(self,"Load PGN","","PGN files (*.pgn);;All files (*.*)")
         if not fn: return
         try:
@@ -1373,7 +1521,7 @@ class MainWindow(QMainWindow):
             self.board=game.board(); self.game_start_fen=self.board.fen(); self.game_moves=[]
             for mv in game.mainline_moves():
                 self.board.push(mv); self.game_moves.append(mv)
-            self.review_rows=[]; self.review_list.clear(); self.board_widget.arrow=None; self.board_widget.review_played_arrow=None; self.board_widget.review_classification=None; self.refresh()
+            self.review_rows=[]; self.review_list.clear(); self.board_widget.arrow=None; self.board_widget.candidate_arrows=[]; self.board_widget.review_played_arrow=None; self.board_widget.review_classification=None; self.refresh()
             self.statusBar().showMessage(f"Loaded {Path(fn).name} — {len(self.game_moves)} plies")
         except Exception as e: QMessageBox.critical(self,"Load PGN",str(e))
 
@@ -1461,6 +1609,14 @@ class MainWindow(QMainWindow):
             self.review_list.addItem(item)
         self.review_btn.setEnabled(True); self.cancel_btn.setEnabled(False); self.graph.update()
         self.statusBar().showMessage(("Review cancelled" if self.review_cancel else "Game review complete"))
+        if rows and not self.review_cancel:
+            important=sum(1 for r in rows if r.classification in ("Inaccuracy","Mistake","Blunder"))
+            strong=sum(1 for r in rows if r.classification=="Best/Good")
+            self.guided_explanation.setText(
+                f"Analysis complete — {len(rows)} half-moves reviewed. "
+                f"{important} improvement point(s) and {strong} best/good move(s). "
+                f"Press ▶ Play Guided Review to walk through the game."
+            )
         self.tabs.setCurrentIndex(2)
 
     def review_item_clicked(self,item):
@@ -1537,6 +1693,188 @@ class MainWindow(QMainWindow):
             f"Board position shown is BEFORE the move.\n"
             f"The BLUE ARROW clearly marks Stockfish's best move."
         )
+        self.board_widget.update()
+
+    def stop_guided_review(self):
+        self.guided_active=False
+        self.guided_auto=False
+        self.guided_try_mode=False
+        self.guided_try_row=None
+        if hasattr(self,"guided_timer"): self.guided_timer.stop()
+        if hasattr(self,"guided_auto_btn"):
+            self.guided_auto_btn.setChecked(False)
+            self.guided_auto_btn.setText("Auto Play")
+
+    def start_guided_review(self):
+        if not self.review_rows:
+            QMessageBox.information(self,"Guided Review","Load a PGN and run Review Entire Game first.")
+            return
+        self.stop_guided_review()
+        self.guided_active=True
+        self.guided_ply=0
+        self.board=chess.Board(self.game_start_fen)
+        self.board_widget.arrow=None
+        self.board_widget.review_played_arrow=None
+        self.board_widget.review_classification=None
+        self.board_widget.candidate_arrows=[]
+        self.guided_explanation.setText(
+            "Guided review started at the initial position. Press Next to step through the game, "
+            "or Auto Play for an automatic replay. Important mistakes will show the played move "
+            "against Stockfish's better move."
+        )
+        self.refresh()
+        self.tabs.setCurrentIndex(2)
+
+    def _guided_row(self, ply):
+        return next((r for r in self.review_rows if r.ply==ply),None)
+
+    def _guided_position_before(self, ply):
+        b=chess.Board(self.game_start_fen)
+        for mv in self.game_moves[:max(0,ply-1)]: b.push(mv)
+        return b
+
+    def _guided_explain_row(self,row,before):
+        move_no=(row.ply+1)//2
+        side="White" if row.ply%2 else "Black"
+        actual=self.game_moves[row.ply-1] if 0 < row.ply <= len(self.game_moves) else None
+        best=None
+        try: best=chess.Move.from_uci(row.bestmove) if row.bestmove else None
+        except Exception: best=None
+        try: best_san=before.san(best) if best else "?"
+        except Exception: best_san=row.bestmove or "?"
+        loss=row.loss
+        if row.classification=="Blunder":
+            lead="🔴 BLUNDER"
+            meaning="This move caused a large drop in Stockfish's evaluation."
+        elif row.classification=="Mistake":
+            lead="🟠 MISTAKE"
+            meaning="This move gave away a significant part of the position."
+        elif row.classification=="Inaccuracy":
+            lead="🟡 INACCURACY"
+            meaning="This was playable, but Stockfish found a noticeably stronger continuation."
+        else:
+            lead="✓ STRONG MOVE"
+            meaning="This move stayed close to Stockfish's preferred play."
+
+        loss_text=""
+        if loss is not None:
+            loss_text=f" Evaluation loss: about {loss/100:.2f} pawns ({loss} cp)."
+        improve=""
+        if row.bestmove and actual is not None and row.bestmove != actual.uci():
+            improve=(
+                f"\nBetter choice: {best_san} ({row.bestmove})."
+                + (f"\nStockfish continuation: {row.pv}" if row.pv else "")
+                + "\nYou can press 🎯 Try Better Move to solve this position yourself."
+            )
+        elif row.pv:
+            improve=f"\nStockfish continuation: {row.pv}"
+        return (
+            f"{lead} — Move {move_no}, {side}: {row.san}\n"
+            f"{meaning}{loss_text}{improve}"
+        )
+
+    def guided_show_ply(self,ply):
+        if not self.review_rows or ply < 1 or ply > len(self.game_moves):
+            return
+        self.guided_active=True
+        self.guided_ply=ply
+        self.guided_try_mode=False
+        self.guided_try_row=None
+        row=self._guided_row(ply)
+        if row is None:return
+        before=self._guided_position_before(ply)
+        self.board=before
+        actual=self.game_moves[ply-1]
+        self.board_widget.candidate_arrows=[]
+        self.board_widget.arrow=row.bestmove if row.bestmove else None
+        if row.classification in ("Inaccuracy","Mistake","Blunder") and row.bestmove != actual.uci():
+            self.board_widget.review_played_arrow=actual.uci()
+            self.board_widget.review_classification=row.classification
+        else:
+            self.board_widget.review_played_arrow=None
+            self.board_widget.review_classification=None
+        self.guided_explanation.setText(self._guided_explain_row(row,before))
+        # Keep the ordinary review list in sync.
+        for i in range(self.review_list.count()):
+            it=self.review_list.item(i)
+            if it.data(Qt.UserRole)==ply:
+                self.review_list.setCurrentItem(it); break
+        if row.score_after is not None:
+            self.update_eval_bar(row.score_after)
+        self.refresh()
+        self.board_widget.update()
+
+    def guided_next(self):
+        if not self.review_rows:
+            return
+        if not self.guided_active:
+            self.start_guided_review()
+        if self.guided_try_mode:
+            self.guided_explanation.setText(self.guided_explanation.text()+"\nFinish or leave the Try Better Move exercise before continuing.")
+            return
+        nxt=self.guided_ply+1
+        if nxt > len(self.game_moves):
+            self.stop_guided_review()
+            self.board=chess.Board(self.game_start_fen)
+            for mv in self.game_moves:self.board.push(mv)
+            self.board_widget.arrow=None; self.board_widget.review_played_arrow=None
+            self.board_widget.review_classification=None; self.board_widget.candidate_arrows=[]
+            self.guided_explanation.setText("✓ Guided review complete. You have reached the final position.")
+            self.refresh()
+            return
+        self.guided_show_ply(nxt)
+
+    def guided_previous(self):
+        if not self.review_rows:return
+        prev=max(1,self.guided_ply-1)
+        self.guided_show_ply(prev)
+
+    def toggle_guided_auto(self,checked):
+        if checked:
+            if not self.review_rows:
+                self.guided_auto_btn.setChecked(False)
+                QMessageBox.information(self,"Guided Review","Analyse the game first.")
+                return
+            if not self.guided_active:self.start_guided_review()
+            self.guided_auto=True
+            self.guided_auto_btn.setText("Pause Auto")
+            self.guided_timer.start()
+        else:
+            self.guided_auto=False
+            self.guided_timer.stop()
+            self.guided_auto_btn.setText("Auto Play")
+
+    def guided_try_better(self):
+        if not self.guided_active or self.guided_ply < 1:
+            QMessageBox.information(self,"Try Better Move","Start the Guided Review and select an analysed move first.")
+            return
+        row=self._guided_row(self.guided_ply)
+        if not row or not row.bestmove:
+            QMessageBox.information(self,"Try Better Move","There is no Stockfish best move stored for this position.")
+            return
+        actual=self.game_moves[self.guided_ply-1]
+        if row.bestmove==actual.uci():
+            QMessageBox.information(self,"Try Better Move","The played move already matches Stockfish's best move here.")
+            return
+        self.guided_timer.stop()
+        self.guided_auto=False
+        self.guided_auto_btn.setChecked(False)
+        self.guided_auto_btn.setText("Auto Play")
+        self.board=self._guided_position_before(self.guided_ply)
+        self.guided_try_mode=True
+        self.guided_try_row=row
+        self.guided_try_attempts=0
+        self.board_widget.arrow=None
+        self.board_widget.review_played_arrow=None
+        self.board_widget.review_classification=None
+        self.board_widget.candidate_arrows=[]
+        move_no=(row.ply+1)//2
+        side="White" if row.ply%2 else "Black"
+        self.guided_explanation.setText(
+            f"🎯 YOUR TURN — Move {move_no}, {side}. The Stockfish answer is hidden. "
+            f"Find a better move than {row.san}. You can keep trying."
+        )
+        self.refresh()
         self.board_widget.update()
 
     def retry_selected_mistake(self):

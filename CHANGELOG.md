@@ -1,17 +1,22 @@
 # Changelog
 
-## 1.0.0
+## v24
 
-First public release based on the v20 Training Suite.
-
-- Raspberry Pi Stockfish over SSH
-- Play modes and animations
-- Live evaluation, MultiPV and candidate arrows
-- Whole-game review
-- Played-vs-best visual review
-- Mistake classification/navigation
+- Guided Game Replay for analysed PGNs
+- Try Better Move guided exercises
 - Retry Mistakes trainer
-- Opening recognition
-- Syzygy probing
-- PGN support
-- Move/check/checkmate reactions
+- MultiPV candidate moves
+- Polished BEST/candidate/PLAYED arrows
+- Improved rounded evaluation bar
+- Improved Stockfish Threads control
+- Syzygy tablebase support
+- Opening recognition/explorer
+- PGN load/save and full-game review
+- Evaluation graph
+- Easy/Medium/Hard remote Stockfish play
+
+### Public release preparation
+
+- Private Raspberry Pi connection details removed
+- Generic `pi@raspberrypi.local` SSH example
+- Windows launcher, README, changelog, gitignore and MIT license included
