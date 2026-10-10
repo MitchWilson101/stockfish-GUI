@@ -600,7 +600,7 @@ def classify(loss):
 class MainWindow(QMainWindow):
     def __init__(self):
         super().__init__()
-        self.setWindowTitle("Stockfish Pi Chess v24")
+        self.setWindowTitle("Stockfish Pi Chess v25")
 
         self.setStyleSheet("""
             QMainWindow, QWidget {
@@ -651,6 +651,33 @@ class MainWindow(QMainWindow):
                 padding-right: 16px;
             }
             QPushButton#PlayServerButton:hover { background: #3b7259; }
+            QPushButton#ThreadStepButton {
+                background: #303640;
+                border: 1px solid #505966;
+                border-radius: 6px;
+                padding: 0px;
+                min-height: 0px;
+                font-size: 9pt;
+                font-weight: 700;
+            }
+            QPushButton#ThreadStepButton:hover {
+                background: #46505d;
+                border-color: #718094;
+            }
+            QPushButton#ThreadStepButton:pressed { background: #252b32; }
+            QLabel#CapturedTitle {
+                color: #9ea7b3;
+                font-size: 9pt;
+                font-weight: 600;
+            }
+            QLabel#CapturedPieces {
+                background: #171a1f;
+                border: 1px solid #3f4650;
+                border-radius: 6px;
+                padding: 4px 8px;
+                font-size: 16pt;
+                min-height: 26px;
+            }
             QLabel#PlayStatus { color: #aeb8c4; font-style: italic; }
             QGroupBox {
                 border: 1px solid #454c56;
@@ -666,48 +693,6 @@ class MainWindow(QMainWindow):
                 border-radius: 6px;
                 padding: 5px 7px;
                 selection-background-color: #4d78a8;
-            }
-            /* v24: keep the Threads spinner buttons fully clickable/visible.
-               The previous generic QSpinBox padding overlapped its arrow controls. */
-            QSpinBox {
-                padding: 5px 24px 5px 7px;
-            }
-            QSpinBox::up-button {
-                subcontrol-origin: border;
-                subcontrol-position: top right;
-                width: 20px;
-                border-left: 1px solid #454c56;
-                border-bottom: 1px solid #343a43;
-                border-top-right-radius: 5px;
-                background: #343a43;
-            }
-            QSpinBox::down-button {
-                subcontrol-origin: border;
-                subcontrol-position: bottom right;
-                width: 20px;
-                border-left: 1px solid #454c56;
-                border-top: 1px solid #343a43;
-                border-bottom-right-radius: 5px;
-                background: #343a43;
-            }
-            QSpinBox::up-button:hover, QSpinBox::down-button:hover {
-                background: #4a535f;
-            }
-            QSpinBox::up-arrow {
-                image: none;
-                width: 0px;
-                height: 0px;
-                border-left: 4px solid transparent;
-                border-right: 4px solid transparent;
-                border-bottom: 6px solid #e8eaed;
-            }
-            QSpinBox::down-arrow {
-                image: none;
-                width: 0px;
-                height: 0px;
-                border-left: 4px solid transparent;
-                border-right: 4px solid transparent;
-                border-top: 6px solid #e8eaed;
             }
             QTabWidget::pane {
                 border: 1px solid #3d444d;
@@ -797,7 +782,7 @@ class MainWindow(QMainWindow):
         outer=QVBoxLayout(root)
 
         header=QHBoxLayout()
-        title=QLabel("STOCKFISH CHESS v24")
+        title=QLabel("STOCKFISH CHESS v25")
         title.setObjectName("AppTitle")
         subtitle=QLabel("Raspberry Pi analysis workstation")
         subtitle.setObjectName("AppSubtitle")
@@ -819,8 +804,23 @@ class MainWindow(QMainWindow):
         self.threads_spin=QSpinBox()
         self.threads_spin.setRange(1, 32)
         self.threads_spin.setValue(4)
+        self.threads_spin.setButtonSymbols(QSpinBox.NoButtons)
+        self.threads_spin.setFixedWidth(58)
+        self.threads_spin.setAlignment(Qt.AlignCenter)
         self.threads_spin.setToolTip("Number of Stockfish search threads on the Raspberry Pi")
         engine_opts.addWidget(self.threads_spin)
+
+        self.threads_down=QPushButton("▼")
+        self.threads_up=QPushButton("▲")
+        for b in (self.threads_down,self.threads_up):
+            b.setObjectName("ThreadStepButton")
+            b.setFixedSize(28,28)
+        self.threads_down.setToolTip("Use one fewer Stockfish thread")
+        self.threads_up.setToolTip("Use one more Stockfish thread")
+        self.threads_down.clicked.connect(self.threads_spin.stepDown)
+        self.threads_up.clicked.connect(self.threads_spin.stepUp)
+        engine_opts.addWidget(self.threads_down)
+        engine_opts.addWidget(self.threads_up)
 
         engine_opts.addWidget(QLabel("Hash (MB):"))
         self.hash_combo=QComboBox()
@@ -843,6 +843,25 @@ class MainWindow(QMainWindow):
         boardrow.addWidget(self.eval_bar)
         boardrow.addWidget(self.board_widget,1)
         ll.addLayout(boardrow,1)
+
+        captured_box=QGroupBox("Captured Pieces")
+        captured_layout=QGridLayout(captured_box)
+        white_cap_title=QLabel("Captured by White")
+        black_cap_title=QLabel("Captured by Black")
+        white_cap_title.setObjectName("CapturedTitle")
+        black_cap_title.setObjectName("CapturedTitle")
+        self.captured_by_white=QLabel("—")
+        self.captured_by_black=QLabel("—")
+        self.captured_by_white.setObjectName("CapturedPieces")
+        self.captured_by_black.setObjectName("CapturedPieces")
+        self.captured_by_white.setToolTip("Black pieces no longer present in the current position")
+        self.captured_by_black.setToolTip("White pieces no longer present in the current position")
+        captured_layout.addWidget(white_cap_title,0,0)
+        captured_layout.addWidget(black_cap_title,0,1)
+        captured_layout.addWidget(self.captured_by_white,1,0)
+        captured_layout.addWidget(self.captured_by_black,1,1)
+        ll.addWidget(captured_box)
+
         boardbuttons=QHBoxLayout()
         for label, fn in [("New Game",self.new_game),("Undo",self.undo),("Flip Board",self.flip),("Load PGN",self.load_pgn),("Save PGN",self.save_pgn)]:
             b=QPushButton(label); b.clicked.connect(fn); boardbuttons.addWidget(b)
@@ -1051,6 +1070,31 @@ class MainWindow(QMainWindow):
         self.stop_guided_review()
         self.refresh()
 
+    def update_captured_pieces(self):
+        """Show material missing from the current position relative to its game start."""
+        if not hasattr(self,"captured_by_white"):
+            return
+        try:
+            start=chess.Board(self.game_start_fen)
+        except Exception:
+            start=chess.Board()
+
+        order=(chess.QUEEN,chess.ROOK,chess.BISHOP,chess.KNIGHT,chess.PAWN)
+
+        def missing(colour):
+            symbols=[]
+            for pt in order:
+                start_n=len(start.pieces(pt,colour))
+                now_n=len(self.board.pieces(pt,colour))
+                count=max(0,start_n-now_n)
+                symbol=PIECES[chess.Piece(pt,colour).symbol()]
+                symbols.extend([symbol]*count)
+            return "  ".join(symbols) if symbols else "—"
+
+        # White captures black pieces; Black captures white pieces.
+        self.captured_by_white.setText(missing(chess.BLACK))
+        self.captured_by_black.setText(missing(chess.WHITE))
+
     def refresh(self):
         # Detect check/checkmate only after the new board position is committed.
         current_fen=self.board.fen()
@@ -1065,6 +1109,7 @@ class MainWindow(QMainWindow):
                 if self.sound_enabled:
                     self._reaction_sound("check")
         self.board_widget.selected=None; self.board_widget.legal_targets.clear(); self.board_widget.update()
+        self.update_captured_pieces()
         self.moves_list.clear()
         b=chess.Board(self.game_start_fen)
         sans=[]
@@ -1630,6 +1675,7 @@ class MainWindow(QMainWindow):
         for mv in self.game_moves[:max(0,ply-1)]:
             b.push(mv)
         self.board=b
+        self.update_captured_pieces()
 
         actual_move=self.game_moves[ply-1] if 0 < ply <= len(self.game_moves) else None
         best_uci=row.bestmove or ""
@@ -1784,6 +1830,7 @@ class MainWindow(QMainWindow):
         if row is None:return
         before=self._guided_position_before(ply)
         self.board=before
+        self.update_captured_pieces()
         actual=self.game_moves[ply-1]
         self.board_widget.candidate_arrows=[]
         self.board_widget.arrow=row.bestmove if row.bestmove else None
@@ -1861,6 +1908,7 @@ class MainWindow(QMainWindow):
         self.guided_auto_btn.setChecked(False)
         self.guided_auto_btn.setText("Auto Play")
         self.board=self._guided_position_before(self.guided_ply)
+        self.update_captured_pieces()
         self.guided_try_mode=True
         self.guided_try_row=row
         self.guided_try_attempts=0
@@ -1888,6 +1936,7 @@ class MainWindow(QMainWindow):
         b=chess.Board(self.game_start_fen)
         for mv in self.game_moves[:max(0,ply-1)]: b.push(mv)
         self.board=b; self.retry_mode=True; self.retry_row=row; self.retry_attempts=0
+        self.update_captured_pieces()
         self.board_widget.arrow=None; self.board_widget.review_played_arrow=None; self.board_widget.candidate_arrows=[]
         self.board_widget.review_classification=None
         move_no=(ply+1)//2; side="White" if ply%2 else "Black"

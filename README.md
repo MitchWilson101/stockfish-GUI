@@ -1,4 +1,4 @@
-# Stockfish Pi Chess v24
+# Stockfish Pi Chess v25
 
 A Windows chess GUI built around **Play → Review → Understand → Retry**.
 

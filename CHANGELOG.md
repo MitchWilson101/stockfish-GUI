@@ -1,5 +1,14 @@
 # Changelog
 
+## v25
+
+- Captured pieces display below the chessboard.
+- Redesigned Stockfish Threads up/down controls.
+- Retains v24 Guided Review, Syzygy, PGN and analysis features.
+- Public SSH default uses a generic Raspberry Pi hostname.
+
+# Changelog
+
 ## v24
 
 - Guided Game Replay for analysed PGNs
